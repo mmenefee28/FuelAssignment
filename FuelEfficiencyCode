@@ -1,0 +1,128 @@
+from IPython.core.display import display, HTML
+display(HTML("<style>.container { width:95% !important; }</style>"))
+
+# Import the necessary libraries
+%tensorflow_version 2.x 
+import matplotlib.pyplot as plt
+import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import models
+from tensorflow.keras import layers
+from tensorflow.keras import backend
+
+# Download the dataset
+dataset_path = keras.utils.get_file("auto-mpg.data", "http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data")
+
+# Add labels to columns and view dataset
+column_names = ['MPG','Cylinders','Displacement','Horsepower','Weight',
+                'Acceleration', 'Model Year', 'Origin']
+raw_dataset = pd.read_csv(dataset_path, names=column_names,
+                      na_values = "?", comment='\t',
+                      sep=" ", skipinitialspace=True)
+
+dataset = raw_dataset.copy()
+dataset.tail()
+
+# Vehicle orgin needs to be encoded to factors.  
+origin = dataset.pop('Origin')
+dataset['USA'] = (origin == 1)*1.0
+dataset['Europe'] = (origin == 2)*1.0
+dataset['Japan'] = (origin == 3)*1.0
+dataset.tail()
+
+# Remove missing data
+dataset = dataset.dropna()
+dataset.isna().sum()
+
+# Split dataset into y tragets and remove the targets from the dataset.  We are predicting MPG (fuel efficiencey) so the targets are MPG
+y_targets = dataset.pop('MPG')
+y_targets
+
+print(dataset)
+
+# Spit the dataset into x_train, x_test, y_train, y_test.  
+
+x_train, x_valid, y_train, y_valid = train_test_split(dataset, y_targets, test_size=0.2, shuffle= True)
+
+x_train2 = dataset.sample(frac=0.8, random_state=0)
+x_test2 = dataset.drop(x_train.index)
+
+y_train2 = y_targets.sample(frac=0.8, random_state=0)
+y_test2 = y_targets.drop(y_train.index)
+
+# Normalize the data by subratcing the mean from each feature and divid by one standard deviation
+mean = x_train.mean(axis = 0)
+x_train -= mean
+
+std = x_train.std(axis = 0)
+x_train /= std
+
+x_valid -= mean
+x_valid /= std
+
+#mean = y_train.mean(axis = 0)
+#y_train -= mean
+
+#std = y_train.std(axis = 0)
+#y_train /= std
+
+#y_valid -= mean
+#y_valid /= std
+
+# Built a sequential neural network model.  Start with backend.clear_session()
+backend.clear_session()
+
+model = keras.Sequential()
+model.add(layers.Dense(64, activation = 'relu', input_shape=(x_train.shape[1],)))
+model.add(layers.Dense(64, activation = 'relu'))
+model.add(layers.Dense(1))
+
+# Compile the model.  Use 'adam' optimizer. 
+model.compile(optimizer = 'adam', loss  = 'mse', metrics=['mae'])
+
+# Fit the model.  Use 1000 epochs.  Add a validation spit to your model.  Set verbose = 0.
+history = model.fit(x_train,
+                    y_train,
+                    epochs = 1000,
+                    batch_size=100,
+                    validation_data=(x_valid, y_valid),
+                    verbose = 0)
+                    
+ # Use this bit of code to view the History output.
+hist = pd.DataFrame(history.history)
+print(hist.tail())
+
+#Plot the loss and MAE vs epochs
+history_dict = history.history
+loss_values = history_dict['loss']
+val_loss_values = history_dict['val_loss']
+acc_values = history_dict['mae']
+val_acc_values = history_dict['val_mae']
+epochs = range(1, len(history_dict['mae']) + 1)
+
+# plot the validataion and training loss vs epochs
+plt.plot(epochs, loss_values, 'r', label = 'Training loss')
+plt.plot(epochs, val_loss_values, 'b', label = 'Validation loss')
+plt.ylim(0,20)
+plt.title('Training and loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+# Use the Boston Housing example to plot the validataion and training mean absolute error vs epochs
+plt.plot(epochs, acc_values, 'r', label = 'Training MAE')
+plt.plot(epochs, val_acc_values, 'b', label = 'Validation MAE')
+plt.ylim(0,5)
+plt.title('Training and validation MAE')
+plt.xlabel('Epochs')
+plt.ylabel('MAE - MPG')
+plt.legend()
+plt.show()
+
+# Evaluate the model on the test data and print the results
+results = model.evaluate(x_valid, y_valid)
+print(results)
+print(model.metrics_names)
